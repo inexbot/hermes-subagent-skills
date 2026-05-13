@@ -19,6 +19,46 @@ Execute implementation plans by dispatching fresh subagents per task. The main m
 
 **Core principle:** Subagents do the work. The main model ensures it's done right — by tracking progress, intervening when subagents get stuck, reviewing every result, and doing the final integration check.
 
+## Before You Start — Check Delegation Config
+
+**On first use, verify subagent delegation is configured.** Without this, `delegate_task` may fail silently or use the wrong model.
+
+### Step 1: Check current config
+
+```bash
+hermes config get delegation
+```
+
+If output shows empty `model` and `provider`, subagents inherit the main model — this works but may not be optimal.
+
+### Step 2: If not configured, tell the user
+
+When you detect delegation is unconfigured, tell the user:
+
+> "Subagent delegation is not configured. Subagents will inherit your main model (which works but may be slow). Do you want to set a dedicated subagent model?
+>
+> **Option A — Same provider, smaller model (easiest):** Add to `~/.hermes/config.yaml`:
+> ```yaml
+> delegation:
+>   model: <smaller-model-name>
+>   provider: <your-current-provider>
+>   max_concurrent_children: 2
+> ```
+>
+> **Option B — Different provider:** See installation README at https://github.com/inexbot/hermes-subagent-skills#subagent-configuration-required-for-delegate_task
+>
+> After config change, restart gateway: `systemctl --user restart hermes-gateway`"
+
+### Step 3: Verify
+
+After user configures, verify by dispatching a minimal test subagent that reports its model name. If the wrong model appears, the gateway hasn't been restarted.
+
+**Key pitfalls to warn the user about:**
+- Built-in providers read API keys from env vars, NOT from `delegation.api_key`
+- `custom_providers` must be YAML list format (`- name:`), not dict
+- Config changes need gateway restart to take effect
+- For full details: `references/delegation-config.md`
+
 ## When to Use
 
 Use this skill when:

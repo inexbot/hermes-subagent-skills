@@ -63,6 +63,85 @@ ln -s ~/hermes-subagent-skills/skills/* ~/.hermes/skills/software-development/
 # To update: cd ~/hermes-subagent-skills && git pull
 ```
 
+## Subagent Configuration (Required for delegate_task)
+
+Subagents spawned by `delegate_task` need a model and provider. If you don't configure this, subagents inherit the main model — which works but may be slow or expensive for worker tasks.
+
+### Option A: Let subagents inherit the main model (zero config)
+
+If your main model is already set up and you're fine with subagents using the same model, no action needed. Skip to Quick Start.
+
+### Option B: Use the same provider, different model
+
+If your main model uses a provider that also offers smaller/faster models (e.g. DeepSeek R1 for main, DeepSeek V3 for subagents):
+
+```yaml
+# ~/.hermes/config.yaml
+delegation:
+  model: deepseek-chat          # smaller/faster model for subagents
+  provider: deepseek            # same provider as main (reads DEEPSEEK_API_KEY env var)
+  max_concurrent_children: 2
+```
+
+⚠️ **Pitfall:** Built-in providers (deepseek, openai, anthropic, minimax-cn, etc.) read API keys from environment variables, NOT from `delegation.api_key` in config. If your env var is already set, this just works.
+
+### Option C: Use a different provider entirely
+
+For a different provider that stores its API key in config (not env var):
+
+```yaml
+# ~/.hermes/config.yaml
+custom_providers:
+  - name: minimax-sub
+    base_url: https://api.minimax.chat/v1
+    api_key: sk-your-key-here
+
+delegation:
+  model: minimax-M2.7
+  provider: custom:minimax-sub    # must be "custom:<name>"
+  max_concurrent_children: 2
+```
+
+⚠️ **Critical format note:** `custom_providers` must be a YAML **list** (each item starts with `- name:`), NOT a dict/map.
+
+### After changing config: restart Hermes Gateway
+
+```bash
+# Linux with systemd
+systemctl --user restart hermes-gateway
+
+# macOS
+launchctl kickstart -k gui/$(id -u)/com.hermes.gateway
+
+# WSL (no systemd)
+sudo hermes gateway stop --system
+sudo hermes gateway start --system
+```
+
+Config changes do NOT take effect until the gateway restarts.
+
+### Verify it works
+
+```bash
+# Check current delegation config
+hermes config get delegation
+
+# Test with a minimal subagent
+# Tell Hermes: "delegate_task a subagent that just reports its model name"
+```
+
+### Common issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Subagent uses wrong model | Gateway not restarted after config change | Restart gateway |
+| "401 Unauthorized" from subagent | Built-in provider but no env var set | Set the provider's env var, OR use custom_providers |
+| api_key in delegation ignored | Built-in providers ignore `delegation.api_key` | Use `custom_providers` instead (see Option C) |
+| custom_providers parse error | Wrong YAML format | Must be list (`- name:`), not dict |
+| Subagent times out on first task | `max_concurrent_children` too high for provider | Reduce to 1 or 2 |
+
+For detailed configuration reference, see `skills/subagent-driven-development/references/delegation-config.md`.
+
 ## Key Concepts
 
 ### subagent-driven-development v2.0.0
